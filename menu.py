@@ -5,6 +5,7 @@ def mostrar_menu():
         print("2. Visualización de datos")
         print("3. Salir")
 
+
         opcion = input("Seleccione una opción: ")
 
         if opcion == "1":
