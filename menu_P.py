@@ -1,6 +1,7 @@
 import datetime
 import requests
 import sqlite3
+import matplotlib.pyplot as plt
 from prettytable import PrettyTable
 
 # Función para mostrar el menú
@@ -34,7 +35,7 @@ def validar_ticker(ticker):
 
 # Función para generar el resumen
 def generar_resumen():
-    conexion = sqlite3.connect("finanzas_P.db")  # Actualización del nombre de la base de datos
+    conexion = sqlite3.connect("finanzas_P.db")
     cursor = conexion.cursor()
 
     consulta = """
@@ -61,50 +62,37 @@ def generar_resumen():
 
     print(tabla)
 
-# Función para solicitar datos a la API
-def solicitud_de_datos(ticker, fecha_inicio, fecha_fin):
-    url = f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{fecha_inicio}/{fecha_fin}"
-    api_key = "7EuDFFydcjhpG3G0JaoJmBUgpNDOZnp8"
-    params = {"sort": "asc", "apiKey": api_key}
-    
-    response = requests.get(url, params=params)
-    
-    if response.status_code == 200:
-        print("Pidiendo datos...")
-        datos = response.json()
-        if datos.get('results'):
-            print("Datos obtenidos correctamente. Guardando en la base de datos...")
-            guardar_datos_en_bd(ticker, datos['results'])
-        else:
-            print("No se encontraron resultados para el rango de fechas proporcionado.")
-    else:
-        print(f"Error al pedir los datos. Status code: {response.status_code}")
-        print("Respuesta de error:", response.text)
-
-# Función para guardar datos en la base de datos
-def guardar_datos_en_bd(ticker, resultados):
+# Función para graficar un ticker
+def graficar_ticker(ticker):
     conexion = sqlite3.connect("finanzas_P.db")
     cursor = conexion.cursor()
-    
-    for dato in resultados:
-        date = datetime.datetime.utcfromtimestamp(dato['t'] / 1000).strftime('%Y-%m-%d')  # Convertir timestamp a fecha
-        volume = dato['v']
-        vwap = dato['vw']
-        open_price = dato['o']
-        close_price = dato['c']
-        high = dato['h']
-        low = dato['l']
-        transactions = dato['n']
 
-        # Insertar datos en la tabla
-        cursor.execute('''
-            INSERT INTO financial_data_polygon (ticker, date, volume, vwap, open, close, high, low, transactions)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (ticker, date, volume, vwap, open_price, close_price, high, low, transactions))
-
-    conexion.commit()
+    consulta = """
+    SELECT date, close FROM financial_data_polygon
+    WHERE ticker = ?
+    ORDER BY date ASC
+    """
+    cursor.execute(consulta, (ticker,))
+    resultados = cursor.fetchall()
     conexion.close()
-    print("Datos guardados en la base de datos correctamente.")
+
+    if not resultados:
+        print(f"No hay datos almacenados para el ticker '{ticker}'.")
+        return
+
+    fechas = [fila[0] for fila in resultados]
+    precios_cierre = [fila[1] for fila in resultados]
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(fechas, precios_cierre, marker="o", linestyle="-", color="b", label=f"{ticker} - Precio de Cierre")
+    plt.xlabel("Fecha")
+    plt.ylabel("Precio de Cierre (USD)")
+    plt.title(f"Evolución del Precio de Cierre para {ticker}")
+    plt.xticks(rotation=45)
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 # Ciclo principal
 while True:
@@ -141,13 +129,16 @@ while True:
         print(f"Pidiendo los datos solicitados para el ticker '{ticker}' desde {fecha_inicio} hasta {fecha_fin}.")
         solicitud_de_datos(ticker, fecha_inicio, fecha_fin)
 
+    
     elif seleccion == 2:
-        resumen = input("¿Deseas ver el Resumen del Ticker? (si/no): ").strip().lower()
+        resumen = input("¿Deseas ver el Resumen del Tickers disponibles? (si/no): ").strip().lower()
         if resumen == "si":
             generar_resumen()
+            continue  # Esto asegura que el programa vuelva al menú y no siga pidiendo el ticker para graficar
         else:
-            print("Funcionalidad del gráfico en construcción.")
-
+            ticker = input("Ingrese el ticker a graficar: ").upper()
+            graficar_ticker(ticker)        
+        
     elif seleccion == 3:
         print("Saliendo del programa...")
         break
